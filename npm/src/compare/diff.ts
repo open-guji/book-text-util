@@ -9,14 +9,19 @@ export interface Hunk {
     i2: number;
     j1: number;
     j2: number;
+    /** 仅 `diffChars` 带 `isVariant` 时出现：这一处是「逐字都是异体字」的等长替换（两侧按异体视为同字对上了，但字形不同） */
+    variant?: true;
 }
+
+/** 判两字等价（异体字等）；相同的字不会传进来 */
+export type CharEq = (a: string, b: string) => boolean;
 
 type Edit = ['e' | 'i' | 'd', number, number];
 
 /** 兜底上限：D 太大时 trace 占 O(D²) 内存，也说明两份文本根本对不上 */
 export const MAX_EDIT_DISTANCE = 4000;
 
-function myers(a: readonly string[], b: readonly string[], maxD: number): Edit[] | null {
+function myers(a: readonly string[], b: readonly string[], maxD: number, same: (x: string, y: string) => boolean): Edit[] | null {
     const n = a.length;
     const m = b.length;
     const max = Math.min(n + m, maxD);
@@ -29,7 +34,7 @@ function myers(a: readonly string[], b: readonly string[], maxD: number): Edit[]
         for (let k = -d; k <= d; k += 2) {
             let x = k === -d || (k !== d && v[off + k - 1] < v[off + k + 1]) ? v[off + k + 1] : v[off + k - 1] + 1;
             let y = x - k;
-            while (x < n && y < m && a[x] === b[y]) {
+            while (x < n && y < m && same(a[x], b[y])) {
                 x++;
                 y++;
             }
@@ -69,21 +74,61 @@ function myers(a: readonly string[], b: readonly string[], maxD: number): Edit[]
     return ed.reverse();
 }
 
-/** 比对两串字，返回合并后的差异；差异太大返回 null */
-export function diffChars(a: readonly string[], b: readonly string[], maxD = MAX_EDIT_DISTANCE): Hunk[] | null {
+/**
+ * 比对两串字，返回合并后的差异；差异太大返回 null。
+ *
+ * 给了 `isVariant` 时，异体字组（逐字互为异体的等长一段）按「同字」对齐，不再把旁边真正的用字不同拖进同一处：
+ * 例如「葢天按」对「蓋天案」得到两处——[葢→蓋]（variant: true）与 [按→案]，而不是一处 3 字的替换。
+ */
+export function diffChars(a: readonly string[], b: readonly string[], maxD = MAX_EDIT_DISTANCE, isVariant?: CharEq | null): Hunk[] | null {
+    const same = isVariant ? (x: string, y: string) => x === y || isVariant(x, y) : (x: string, y: string) => x === y;
+    const hunks = diffRaw(a, b, maxD, same);
+    if (!hunks || !isVariant) return hunks;
+    // 对齐上等价、字面不同的位置：补成 variant 差异（相邻的合并）
+    const out: Hunk[] = [];
+    let ai = 0;
+    let bi = 0;
+    const gap = (to: number) => {
+        // [ai,to) 与 [bi, bi+(to-ai)) 一一对应
+        let run: Hunk | null = null;
+        for (let k = 0; ai + k < to; k++) {
+            if (a[ai + k] !== b[bi + k]) {
+                if (!run) run = { i1: ai + k, i2: ai + k + 1, j1: bi + k, j2: bi + k + 1, variant: true };
+                else {
+                    run.i2++;
+                    run.j2++;
+                }
+            } else if (run) {
+                out.push(run);
+                run = null;
+            }
+        }
+        if (run) out.push(run);
+    };
+    for (const h of hunks) {
+        gap(h.i1);
+        out.push(h);
+        ai = h.i2;
+        bi = h.j2;
+    }
+    gap(a.length);
+    return out;
+}
+
+function diffRaw(a: readonly string[], b: readonly string[], maxD: number, same: (x: string, y: string) => boolean): Hunk[] | null {
     // 先削掉公共前后缀：大部分篇幅相同，能大幅减小 D 与 trace
     let lo = 0;
-    while (lo < a.length && lo < b.length && a[lo] === b[lo]) lo++;
+    while (lo < a.length && lo < b.length && same(a[lo], b[lo])) lo++;
     let ea = a.length;
     let eb = b.length;
-    while (ea > lo && eb > lo && a[ea - 1] === b[eb - 1]) {
+    while (ea > lo && eb > lo && same(a[ea - 1], b[eb - 1])) {
         ea--;
         eb--;
     }
     const sa = a.slice(lo, ea);
     const sb = b.slice(lo, eb);
     if (sa.length === 0 && sb.length === 0) return [];
-    const ed = myers(sa, sb, maxD);
+    const ed = myers(sa, sb, maxD, same);
     if (!ed) return null;
     const ops: Hunk[] = [];
     let cur: Hunk | null = null;

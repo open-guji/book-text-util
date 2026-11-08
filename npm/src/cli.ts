@@ -13,11 +13,17 @@ import { dirSource, writeExport } from './node';
 import { compareWhole } from './compare/compare';
 import { buildVariantTest } from './compare/variants';
 import { chapterChars } from './compare/wikitext';
+import { buildReport, parseChapters, type ReportChapter } from './compare/report';
+import { charSlots, type CharDoc } from './guji-md';
+import { writeFile } from 'node:fs/promises';
 
 const HELP = `用法：
   book-text-util export  --root <版本目录> --chapter <册号> [--format lines|punct|entity] [--links]
                          [--glyph original|traditional|simplified] [--title 书名] [--id 条目id] [--out 目录]
   book-text-util compare --base <底本.txt> --ref <对照本.md> [--variants <glyph-variants.json>] [--json]
+
+  book-text-util report  --base-root <版本目录> --ref-root <对照版本目录> --chapters 001-005 [--variants <glyph-variants.json>]
+                         [--title 标题] [--base-label 名] [--ref-label 名] [--list word,add,omit,glyph] [--out 报告.md]
 
 export：读版本目录里的 index.json 与 <册>.char.json 等，生成 guji-markdown；--glyph 非 original 需要安装 opencc-js 与 book-index-ui。
 compare：把两份文本去标点后做字级比对，列出每处差异及分类。`;
@@ -87,7 +93,39 @@ async function cmdCompare(argv: string[]) {
     }
 }
 
+async function cmdReport(argv: string[]) {
+    const { values: v } = parseArgs({
+        args: argv,
+        options: {
+            'base-root': { type: 'string' }, 'ref-root': { type: 'string' }, chapters: { type: 'string' }, variants: { type: 'string' },
+            title: { type: 'string' }, 'base-label': { type: 'string', default: '底本' }, 'ref-label': { type: 'string', default: '对照本' },
+            list: { type: 'string' }, out: { type: 'string' },
+        },
+    });
+    if (!v['base-root'] || !v['ref-root'] || !v.chapters) die('需要 --base-root、--ref-root、--chapters\n\n' + HELP);
+    const table = v.variants ? JSON.parse(await readFile(v.variants, 'utf-8')) : null;
+    const isVariant = table ? buildVariantTest(table) : null;
+    const chapters: ReportChapter[] = [];
+    for (const file of parseChapters(v.chapters)) {
+        const char = JSON.parse(await readFile(join(v['base-root'], `${file}.char.json`), 'utf-8')) as CharDoc;
+        const cells = charSlots(char).map(([a, c]) => ({ a, c }));
+        const md = await readFile(join(v['ref-root'], `${file}.md`), 'utf-8');
+        chapters.push({ file, result: await compareWhole({ cells, md, file, label: file, isVariant }) });
+    }
+    const md = buildReport(chapters, {
+        title: v.title ?? `对校报告 ${v.chapters}`,
+        baseLabel: v['base-label']!,
+        refLabel: v['ref-label']!,
+        ...(v.list ? { list: v.list.split(',') as never } : {}),
+    });
+    if (v.out) {
+        await writeFile(v.out, md, 'utf-8');
+        process.stdout.write(`${v.out}\n`);
+    } else process.stdout.write(md + '\n');
+}
+
 const [cmd, ...rest] = process.argv.slice(2);
 if (cmd === 'export') await cmdExport(rest);
 else if (cmd === 'compare') await cmdCompare(rest);
+else if (cmd === 'report') await cmdReport(rest);
 else process.stdout.write(HELP + '\n');

@@ -6,3 +6,4 @@ export * from './url';
 export * from './variants';
 export * from './volumes';
 export * from './wikitext';
+export * from './report';
