@@ -116,12 +116,12 @@ async function compareSeg(input: CompareInput, seg: VolumeSeg, out: CompareItem[
         const [j0, j1] = trimWikiToBase(base, wiki, seg.startsPartial, seg.endsPartial);
         wiki = wiki.slice(j0, j1);
     }
-    const hunks = diffChars(base, wiki);
+    const hunks = diffChars(base, wiki, undefined, input.isVariant);
     if (!hunks) return { ...res, status: 'too-different' };
     const structEnd = seg.headEnd - seg.from;
     let changed = 0;
     hunks.forEach((h, n) => {
-        const cat = classify(h, base, wiki, { isVariant: input.isVariant, structEnd });
+        const cat = h.variant ? 'glyph' : classify(h, base, wiki, { isVariant: input.isVariant, structEnd });
         const ins = h.i1 === h.i2;
         const del = h.j1 === h.j2;
         changed += Math.max(h.i2 - h.i1, h.j2 - h.j1);

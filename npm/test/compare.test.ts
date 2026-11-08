@@ -2,9 +2,10 @@ import { diffChars } from '../src/compare/diff';
 import { wikiChars } from '../src/compare/wikitext';
 import { classify } from '../src/compare/classify';
 import { cnNumber, volumeNo, wikiFileOf, splitVolumes, nextContinues, type BaseCell } from '../src/compare/volumes';
-import { compareChapter, trimWikiToBase } from '../src/compare/compare';
+import { compareChapter, compareWhole, trimWikiToBase } from '../src/compare/compare';
 import { buildVariantTest } from '../src/compare/variants';
 import { parseCmp, formatCmp } from '../src/compare/url';
+import { buildReport, anchorText, countByCat, parseChapters } from '../src/compare/report';
 
 const arr = (s: string) => Array.from(s);
 const cellsOf = (s: string, page = 1): BaseCell[] => arr(s).map((c, i) => ({ c, a: `${page}:${Math.floor(i / 20) + 1}:${(i % 20) + 1}` }));
@@ -25,6 +26,49 @@ describe('diffChars', () => {
     });
     it('差异超过上限返回 null', () => {
         expect(diffChars(arr('abcdefghij'), arr('klmnopqrst'), 5)).toBeNull();
+    });
+});
+
+describe('diffChars：异体字组', () => {
+    const isVariant = buildVariantTest({ pairs: '葢蓋\n畧略\n爲為' });
+    it('不给判定函数时，异体照旧算差异', () => {
+        expect(diffChars(arr('葢天按'), arr('蓋天案'))).toEqual([{ i1: 0, i2: 1, j1: 0, j2: 1 }, { i1: 2, i2: 3, j1: 2, j2: 3 }]);
+        // 相邻的异体与用字不同会粘成一处，类别只能整体判成 word
+        expect(diffChars(arr('葢按天'), arr('蓋案天'))).toEqual([{ i1: 0, i2: 2, j1: 0, j2: 2 }]);
+    });
+    it('异体与真正的用字不同分开：[葢→蓋] 异体，[按→案] 用字不同', () => {
+        expect(diffChars(arr('葢天按'), arr('蓋天案'), undefined, isVariant)).toEqual([
+            { i1: 0, i2: 1, j1: 0, j2: 1, variant: true },
+            { i1: 2, i2: 3, j1: 2, j2: 3 },
+        ]);
+    });
+    it('异体与用字不同相邻：以前粘成一条 word，现在拆成 异体＋用字不同', () => {
+        expect(diffChars(arr('葢按天'), arr('蓋案天'), undefined, isVariant)).toEqual([
+            { i1: 0, i2: 1, j1: 0, j2: 1, variant: true },
+            { i1: 1, i2: 2, j1: 1, j2: 2 },
+        ]);
+    });
+    it('相邻的异体字合成一组', () => {
+        expect(diffChars(arr('天葢畧地'), arr('天蓋略地'), undefined, isVariant)).toEqual([{ i1: 1, i2: 3, j1: 1, j2: 3, variant: true }]);
+    });
+    it('异体字与旁边的增删不粘在一起', () => {
+        const hs = diffChars(arr('葢天地'), arr('蓋X天地'), undefined, isVariant)!;
+        expect(hs).toEqual([
+            { i1: 0, i2: 1, j1: 0, j2: 1, variant: true },
+            { i1: 1, i2: 1, j1: 1, j2: 2 },
+        ]);
+    });
+    it('只靠异体字对齐不会把整句错位：异体在句首、尾部也能对上', () => {
+        expect(diffChars(arr('爲天下'), arr('為天下'), undefined, isVariant)).toEqual([{ i1: 0, i2: 1, j1: 0, j2: 1, variant: true }]);
+        expect(diffChars(arr('天下爲'), arr('天下為'), undefined, isVariant)).toEqual([{ i1: 2, i2: 3, j1: 2, j2: 3, variant: true }]);
+    });
+    it('完全相同或只差异体：不出 word', () => {
+        expect(diffChars(arr('天地'), arr('天地'), undefined, isVariant)).toEqual([]);
+    });
+    it('异体判定不是传递的：葢≈蓋、蓋≈盖 不推出 葢≈盖', () => {
+        const t = buildVariantTest({ pairs: '葢蓋\n蓋盖' });
+        expect(t('葢', '蓋')).toBe(true);
+        expect(t('葢', '盖')).toBe(false);
     });
 });
 
@@ -50,6 +94,22 @@ describe('classify', () => {
     it('多字替换逐字判：全是异体才算异体', () => {
         expect(classify({ i1: 0, i2: 2, j1: 0, j2: 2 }, arr('葢畧'), arr('蓋略'), { isVariant })).toBe('glyph');
         expect(classify({ i1: 0, i2: 2, j1: 0, j2: 2 }, arr('葢按'), arr('蓋案'), { isVariant })).toBe('word');
+    });
+});
+
+describe('compareWhole：异体字组分类', () => {
+    it('一处异体＋一处用字不同＋一处增：三条，类别各自对', async () => {
+        const isVariant = buildVariantTest({ pairs: '葢蓋' });
+        const res = await compareWhole({ cells: cellsOf('葢天按地玄'), md: '蓋天案地X玄', file: '001', label: '本册', isVariant });
+        expect(res.items.map((i) => [i.cat, i.base, i.reading])).toEqual([
+            ['glyph', '葢', '蓋'],
+            ['word', '按', '案'],
+            ['add', '', 'X'],
+        ]);
+    });
+    it('没有异体表时异体算用字不同', async () => {
+        const res = await compareWhole({ cells: cellsOf('葢天按'), md: '蓋天案', file: '001', label: '本册', isVariant: null });
+        expect(res.items.map((i) => i.cat)).toEqual(['word', 'word']);
     });
 });
 
@@ -142,4 +202,36 @@ describe('cmp 参数', () => {
         for (const bad of ['', null, undefined, 'A-b', 'a-1x', 'a b', '-x', '../x']) expect(parseCmp(bad as string)).toBeNull();
     });
     it('格式化', () => expect(formatCmp({ id: 'a', key: 'x' })).toBe('a-x'));
+});
+
+describe('对校报告', () => {
+    it('parseChapters：范围、逗号、保持位数', () => {
+        expect(parseChapters('001-003')).toEqual(['001', '002', '003']);
+        expect(parseChapters('1-3,010')).toEqual(['1', '2', '3', '010']);
+        expect(parseChapters('')).toEqual([]);
+    });
+    it('anchorText', () => {
+        expect(anchorText('7:7:20')).toBe('7页7列20字');
+        expect(anchorText('t:3:1')).toBe('t:3:1');
+    });
+    it('汇总与分类逐条：异体只计数，竖线转义', async () => {
+        const isVariant = buildVariantTest({ pairs: '葢蓋' });
+        const result = await compareWhole({ cells: cellsOf('葢天按地玄黃'), md: '蓋天案地X玄', file: '001', label: '001', isVariant });
+        expect(countByCat(result.items)).toEqual({ word: 1, add: 1, omit: 1, glyph: 1, struct: 0 });
+        const md = buildReport([{ file: '001', result }], { title: 'T', baseLabel: '甲|本', refLabel: '乙本' });
+        expect(md).toContain('| 001 | 6 |');
+        expect(md).toContain('### 用字不同（1）');
+        expect(md).toContain('### 对照本多（1）');
+        expect(md).toContain('### 对照本少（1）');
+        expect(md).not.toContain('### 异体字');
+        expect(md).toContain('甲\\|本');
+        expect(md).toContain('| 1页1列3字 |');
+        const withGlyph = buildReport([{ file: '001', result }], { title: 'T', baseLabel: 'a', refLabel: 'b', list: ['glyph'] });
+        expect(withGlyph).toContain('### 异体字（1）');
+        expect(withGlyph).not.toContain('### 用字不同');
+    });
+    it('没比出结果的册标明状态', () => {
+        const md = buildReport([{ file: '002', result: { items: [], segments: [{ no: null, label: 'x', from: 0, to: 5, status: 'too-different', wikiFile: '002' }] } }], { title: 'T', baseLabel: 'a', refLabel: 'b' });
+        expect(md).toContain('没有比出结果：too-different');
+    });
 });
