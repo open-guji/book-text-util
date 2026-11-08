@@ -1,0 +1,35 @@
+{
+  "name": "book-text-util",
+  "version": "0.1.0",
+  "description": "古籍文本处理工具：下载导出 guji-markdown、版本对校、字形转换。网站与命令行脚本共用。",
+  "license": "CC-BY-SA-4.0",
+  "type": "module",
+  "sideEffects": false,
+  "engines": { "node": ">=18" },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js", "require": "./dist/index.cjs" },
+    "./browser": { "types": "./dist/browser.d.ts", "import": "./dist/browser.js", "require": "./dist/browser.cjs" },
+    "./node": { "types": "./dist/node.d.ts", "import": "./dist/node.js", "require": "./dist/node.cjs" },
+    "./package.json": "./package.json"
+  },
+  "bin": { "book-text-util": "./dist/cli.js" },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "prepublishOnly": "npm run typecheck && npm test && npm run build"
+  },
+  "repository": { "type": "git", "url": "git+https://github.com/open-guji/book-text-util.git", "directory": "npm" },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "book-index-ui": "0.66.3",
+    "opencc-js": "1.0.5",
+    "tsup": "^8.5.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}
