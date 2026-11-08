@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "古籍文本处理工具：下载导出 guji-markdown、版本对校、字形转换。网站与命令行脚本共用。",
   "license": "CC-BY-SA-4.0",
+  "publishConfig": { "access": "public", "provenance": true },
   "type": "module",
   "sideEffects": false,
   "engines": { "node": ">=18" },
