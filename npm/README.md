@@ -77,3 +77,7 @@ cd npm && npm ci && npm run typecheck && npm test && npm run build
 ```
 
 改导出规则须与 book-text 的 Python 生成器一起改：`python3 tools/export-golden.py --book-text <book-text 检出>` 重出正文答案，`UPDATE_GOLDEN=1 npm test` 重出整文件答案。
+
+## 发布
+
+Actions →「Publish book-text-util」→ Run workflow（`dry_run` 可先试）。走 npm Trusted Publishing，不存 token；发布前把 `npm/package.json` 的 version 升好（默认只升 patch）。首次需在 npmjs.com 的包设置里登记 Trusted Publisher：`open-guji / book-text-util / publish.yml`。
