@@ -1,4 +1,4 @@
-import { runCompare } from '../src/compare/run';
+import { resolveTargetKey, runCompare } from '../src/compare/run';
 
 describe('runCompare', () => {
     const baseCells = Array.from('卷端天地玄黃').map((c, i) => ({ c, a: `1:1:${i + 1}` }));
@@ -47,5 +47,21 @@ describe('runCompare：册无卷标题，按章名取几卷（全唐文自校本
         const r = await runCompare({ transport: t2, base: { id: 'base', key: 'default', chapter: '005' }, target: { id: 'kanripo' }, cells: baseCells, isVariant: null });
         expect(r.segments[0].status).toBe('no-wiki');
         expect(r.items).toEqual([]);
+    });
+});
+
+describe('resolveTargetKey', () => {
+    const t = (versions: { key: string; kind?: string }[]) => ({ getTextManifest: async () => ({ versions }) });
+    it('指明了 key 就用它', async () => {
+        expect(await resolveTargetKey(t([{ key: 'default' }]), { id: 'w', key: 'kanripo' })).toBe('kanripo');
+    });
+    it('主版本不是整理本：取 default', async () => {
+        expect(await resolveTargetKey(t([{ key: 'default', kind: 'transcription' }, { key: 'kanripo', kind: 'transcription' }]), { id: 'w' })).toBe('default');
+    });
+    it('主版本是整理本（md 只有篇目）：取第一份不是整理本的', async () => {
+        expect(await resolveTargetKey(t([{ key: 'default', kind: 'collated' }, { key: 'wikisource', kind: 'transcription' }]), { id: 'w' })).toBe('wikisource');
+    });
+    it('都是整理本：仍取 default', async () => {
+        expect(await resolveTargetKey(t([{ key: 'default', kind: 'collated' }]), { id: 'w' })).toBe('default');
     });
 });
