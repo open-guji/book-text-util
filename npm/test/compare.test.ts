@@ -1,7 +1,7 @@
 import { diffChars } from '../src/compare/diff';
 import { wikiChars } from '../src/compare/wikitext';
 import { classify } from '../src/compare/classify';
-import { cnNumber, volumeNo, wikiFileOf, splitVolumes, nextContinues, type BaseCell } from '../src/compare/volumes';
+import { cnNumber, volumeNo, wikiFileOf, volumeRangeOf, splitVolumes, nextContinues, type BaseCell } from '../src/compare/volumes';
 import { compareChapter, compareWhole, trimWikiToBase } from '../src/compare/compare';
 import { buildVariantTest } from '../src/compare/variants';
 import { parseCmp, formatCmp } from '../src/compare/url';
@@ -233,5 +233,27 @@ describe('对校报告', () => {
     it('没比出结果的册标明状态', () => {
         const md = buildReport([{ file: '002', result: { items: [], segments: [{ no: null, label: 'x', from: 0, to: 5, status: 'too-different', wikiFile: '002' }] } }], { title: 'T', baseLabel: 'a', refLabel: 'b' });
         expect(md).toContain('没有比出结果：too-different');
+    });
+});
+
+describe('Kanripo 式卷名', () => {
+    it('wikiFileOf 认「卷七」「卷二十三　某篇」', () => {
+        const chs = [{ file: '007', title: '卷七' }, { file: '023', title: '卷二十三　表' }];
+        expect(wikiFileOf(7, chs)).toBe('007');
+        expect(wikiFileOf(23, chs)).toBe('023');
+        expect(wikiFileOf(8, chs)).toBeNull();
+    });
+    it('维基文庫「卷007」优先', () => {
+        expect(wikiFileOf(7, [{ file: 'a', title: '卷七' }, { file: 'b', title: '卷007' }])).toBe('b');
+    });
+    it('volumeRangeOf', () => {
+        expect(volumeRangeOf('卷七至卷十')).toEqual([7, 10]);
+        expect(volumeRangeOf('卷一百一至一百三')).toEqual([101, 103]);
+        expect(volumeRangeOf('卷七')).toEqual([7, 7]);
+        expect(volumeRangeOf('卷十至卷七')).toBeNull();
+        expect(volumeRangeOf('目錄')).toBeNull();
+    });
+    it('wikiChars：拆字式记 □，小注标记去掉', () => {
+        expect(wikiChars('## 卷七\n\n天:zi[⿰亻尔]<四|五>。').join('')).toBe('天□四五');
     });
 });

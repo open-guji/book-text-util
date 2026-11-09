@@ -5,7 +5,7 @@
 import { compareChapter, compareWhole, type CompareResult } from './compare';
 import type { VariantTest } from './classify';
 import { loadVariantTest } from './variants';
-import { nextContinues, volumeNo, type BaseCell, type Heading, type WikiChapter } from './volumes';
+import { nextContinues, volumeNo, volumeRangeOf, type BaseCell, type Heading, type WikiChapter } from './volumes';
 import type { CompareTarget } from './url';
 
 interface TextTransport {
@@ -88,6 +88,9 @@ export async function runCompare(input: RunInput): Promise<CompareResult & { tar
         wikiChapters,
         getWikiMd,
         isVariant,
+        // 册无卷标题（如全唐文自校本一册一章、章名「卷七至卷十」）：按章名取对照本的几卷
+        volumeRange: typeof chapters[at]?.title === 'string' ? volumeRangeOf(chapters[at].title as string) : null,
+        volumeLabel: typeof chapters[at]?.title === 'string' ? (chapters[at].title as string) : undefined,
     });
     return { ...result, targetKey, wikiChapters };
 }
