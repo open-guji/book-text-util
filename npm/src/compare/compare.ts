@@ -35,8 +35,10 @@ export interface SegResult {
     from: number;
     to: number;
     status: SegStatus;
-    /** 对照本章文件 */
+    /** 对照本章文件（多卷拼成一段时为第一卷，全部见 wikiFiles） */
     wikiFile: string | null;
+    /** 多卷拼成一段比对时的各卷章文件 */
+    wikiFiles?: string[];
     /** 相似度 0..1（ok 时有） */
     similarity?: number;
 }
@@ -101,18 +103,43 @@ export interface CompareInput {
     /** 取对照本某章的 md 文本；取不到返回 null */
     getWikiMd: (file: string) => Promise<string | null>;
     isVariant: VariantTest;
+    /**
+     * 本册没有一级标题（卷）时，按册名（章 title）给出的卷范围，如「卷七至卷十」→ [7, 10]：
+     * 对照本这几卷拼起来与整册比对。有一级标题时不用。
+     */
+    volumeRange?: [number, number] | null;
+    /** 那一段的名称（一般就是册名）；不给按卷号写 */
+    volumeLabel?: string;
 }
 
-async function compareSeg(input: CompareInput, seg: VolumeSeg, out: CompareItem[], idStart: number, whole?: { md: string; file: string }): Promise<SegResult> {
+async function compareSeg(input: CompareInput, seg: VolumeSeg, out: CompareItem[], idStart: number, whole?: { md: string; file: string }, range?: [number, number]): Promise<SegResult> {
     const res: SegResult = { no: seg.no, label: seg.label, from: seg.from, to: seg.to, status: 'ok', wikiFile: null };
-    const file = whole ? whole.file : seg.no === null ? null : wikiFileOf(seg.no, input.wikiChapters);
-    if (!file) return { ...res, status: 'no-wiki' };
-    res.wikiFile = file;
-    const md = whole ? whole.md : await input.getWikiMd(file);
-    if (md === null) return { ...res, status: 'fetch-failed' };
+    let wiki: string[];
+    if (whole) {
+        res.wikiFile = whole.file;
+        wiki = chapterChars(whole.md);
+    } else if (range) {
+        const files: string[] = [];
+        for (let n = range[0]; n <= range[1]; n++) {
+            const f = wikiFileOf(n, input.wikiChapters);
+            if (!f) return { ...res, wikiFile: files[0] ?? null, wikiFiles: files, status: 'no-wiki' };
+            files.push(f);
+        }
+        res.wikiFile = files[0];
+        res.wikiFiles = files;
+        const mds = await Promise.all(files.map((f) => input.getWikiMd(f)));
+        if (mds.some((m) => m === null)) return { ...res, status: 'fetch-failed' };
+        wiki = mds.flatMap((m) => wikiChars(m as string));
+    } else {
+        const file = seg.no === null ? null : wikiFileOf(seg.no, input.wikiChapters);
+        if (!file) return { ...res, status: 'no-wiki' };
+        res.wikiFile = file;
+        const md = await input.getWikiMd(file);
+        if (md === null) return { ...res, status: 'fetch-failed' };
+        wiki = wikiChars(md);
+    }
     const base = input.cells.slice(seg.from, seg.to).map((c) => c.c);
-    let wiki = whole ? chapterChars(md) : wikiChars(md);
-    if (!whole) {
+    if (!whole && !range) {
         const [j0, j1] = trimWikiToBase(base, wiki, seg.startsPartial, seg.endsPartial);
         wiki = wiki.slice(j0, j1);
     }
@@ -151,6 +178,15 @@ async function compareSeg(input: CompareInput, seg: VolumeSeg, out: CompareItem[
 
 /** 比对一册：按卷分段，各卷分别取对照本、分别比对（不跨卷错位），结果按底本字序排列 */
 export async function compareChapter(input: CompareInput): Promise<CompareResult> {
+    const range = input.volumeRange;
+    if (range && !input.headings.some((h) => h.level === 1)) {
+        const label = input.volumeLabel ?? (range[0] === range[1] ? `卷${range[0]}` : `卷${range[0]}至卷${range[1]}`);
+        const seg: VolumeSeg = { no: range[0], label, from: 0, to: input.cells.length, startsPartial: false, endsPartial: false, headEnd: 0 };
+        const items: CompareItem[] = [];
+        const res = await compareSeg(input, seg, items, 0, undefined, range);
+        items.sort((a, b) => a.i1 - b.i1 || a.i2 - b.i2);
+        return { items, segments: [res] };
+    }
     const segs = splitVolumes(input.cells, input.headings, input.prevVolNo, input.lastContinues);
     const items: CompareItem[] = [];
     const segments: SegResult[] = [];

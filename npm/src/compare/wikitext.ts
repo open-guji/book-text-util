@@ -9,13 +9,21 @@ const VOLUME_LINE = /^#+\s*卷[\d〇零一二三四五六七八九十百]+\s*$/;
 /** 标点、空白、分隔符：\p{P} 覆盖「，。、；：？！《》「」『』“”‘’（）·」等全部常见中西标点；注意 □ 属于 So（符号），不在内，要保留 */
 const STRIP = /[\p{P}\p{Z}\s]/gu;
 
+/**
+ * guji-markdown 的拆字式 `:zi[⿰亻尔]`（Kanripo 补字码转来，未核正字）：整个记号当一个认不出的字，记 □，
+ * 免得 IDS 的部件被当成好几个字去比。
+ */
+const ZI = /:zi\[[^\]\n]*\]/g;
+/** 双行小注的标记 `<…|…>` 不是字（它们属符号类 Sm，不在 STRIP 里）；Kanripo 本、维基文庫的版本注都用到 */
+const NOTE_MARK = /[<>|]/g;
+
 export function wikiChars(md: string): string[] {
     const lines = md
         .split('\n')
         .map((s) => s.trim())
         .filter((s) => s && !VOLUME_LINE.test(s) && !STATUS_LINE.test(s))
         .map((s) => s.replace(/^#+\s*/, ''));
-    return Array.from(lines.join('').replace(STRIP, ''));
+    return Array.from(lines.join('').replace(ZI, '□').replace(NOTE_MARK, '').replace(STRIP, ''));
 }
 
 /**
@@ -24,10 +32,8 @@ export function wikiChars(md: string): string[] {
  * 其余照常去掉标点与空白（这类版本多数没有标点，保持原分行）。
  * 双行小注的标记 `<…|…>`（`<` `>` 起止，`|` 换列）不是字，去掉（它们属符号类 Sm，不在 STRIP 里）。
  */
-const NOTE_MARK = /[<>|]/g;
-
 export function chapterChars(md: string): string[] {
     const lines = md.split('\n').map((s) => s.trim()).filter(Boolean);
     if (lines.length && /^#{1,2}\s/.test(lines[0])) lines.shift();
-    return Array.from(lines.map((s) => s.replace(/^#+\s*/, '')).join('').replace(NOTE_MARK, '').replace(STRIP, ''));
+    return Array.from(lines.map((s) => s.replace(/^#+\s*/, '')).join('').replace(ZI, '□').replace(NOTE_MARK, '').replace(STRIP, ''));
 }

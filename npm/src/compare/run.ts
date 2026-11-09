@@ -5,11 +5,11 @@
 import { compareChapter, compareWhole, type CompareResult } from './compare';
 import type { VariantTest } from './classify';
 import { loadVariantTest } from './variants';
-import { nextContinues, volumeNo, type BaseCell, type Heading, type WikiChapter } from './volumes';
+import { nextContinues, volumeNo, volumeRangeOf, type BaseCell, type Heading, type WikiChapter } from './volumes';
 import type { CompareTarget } from './url';
 
 interface TextTransport {
-    getTextManifest?(id: string): Promise<{ versions: { key: string; label?: string; name?: string }[] } | null>;
+    getTextManifest?(id: string): Promise<{ versions: { key: string; kind?: string; label?: string; name?: string }[] } | null>;
     getTextIndex?(id: string, key: string): Promise<{ chapters: Record<string, unknown>[] } | null>;
     getChapter?(id: string, key: string, chapter: string, opts?: { json?: boolean }): Promise<{ md: string | null } | null>;
 }
@@ -17,13 +17,19 @@ interface TextTransport {
 const headingsOf = (ch: Record<string, unknown> | undefined): Heading[] =>
     Array.isArray(ch?.headings) ? (ch!.headings as Heading[]).filter((h) => h && typeof h.anchor === 'string' && typeof h.label === 'string' && typeof h.level === 'number') : [];
 
-/** 对照本的主版本 key：有 default 取它，否则第一份（与阅读页同规则） */
+/**
+ * 对照本没指明版本时取哪一份：有 default 取它，否则第一份（与阅读页同规则）；
+ * 但整理本（kind=collated）的 md 只有篇目、正文在 json 里，拿来逐字比没有意义，
+ * 这时改取第一份不是整理本的版本（如四庫總目维基条目的 wikisource）。都是整理本就仍取 default。
+ */
 export async function resolveTargetKey(transport: TextTransport, target: CompareTarget): Promise<string | null> {
     if (target.key) return target.key;
     const m = await transport.getTextManifest?.(target.id);
     const vs = m?.versions;
     if (!Array.isArray(vs) || vs.length === 0) return null;
-    return vs.find((v) => v.key === 'default')?.key ?? vs[0].key;
+    const main = vs.find((v) => v.key === 'default') ?? vs[0];
+    if (main.kind !== 'collated') return main.key;
+    return vs.find((v) => v.kind !== 'collated')?.key ?? main.key;
 }
 
 export interface RunInput {
@@ -88,6 +94,9 @@ export async function runCompare(input: RunInput): Promise<CompareResult & { tar
         wikiChapters,
         getWikiMd,
         isVariant,
+        // 册无卷标题（如全唐文自校本一册一章、章名「卷七至卷十」）：按章名取对照本的几卷
+        volumeRange: typeof chapters[at]?.title === 'string' ? volumeRangeOf(chapters[at].title as string) : null,
+        volumeLabel: typeof chapters[at]?.title === 'string' ? (chapters[at].title as string) : undefined,
     });
     return { ...result, targetKey, wikiChapters };
 }

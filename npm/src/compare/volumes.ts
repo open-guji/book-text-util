@@ -56,10 +56,28 @@ export function volumeNo(label: string): number | null {
     return m ? cnNumber(m[1]) : null;
 }
 
-/** 卷序号 → 对照本章文件（title 为「卷001」：数字补零到三位）；没有返回 null */
+/**
+ * 卷序号 → 对照本章文件；没有返回 null。
+ * 认两种章名：维基文庫的「卷001」（数字补零到三位），和 Kanripo 等的「卷七」「卷二十三」（汉字数字，后面可带篇名）。
+ */
 export function wikiFileOf(no: number, chapters: readonly WikiChapter[]): string | null {
     const want = `卷${String(no).padStart(3, '0')}`;
-    return chapters.find((c) => c.title.trim() === want)?.file ?? null;
+    const exact = chapters.find((c) => c.title.trim() === want);
+    if (exact) return exact.file;
+    return chapters.find((c) => volumeNo(c.title) === no)?.file ?? null;
+}
+
+/**
+ * 章名里的卷范围：「卷七至卷十」→ [7, 10]，「卷七」→ [7, 7]；认不出返回 null。
+ * 用于底本册没有一级标题（卷）时，按册名决定取对照本哪几卷（如全唐文自校本一册一章、章名写「卷七至卷十」）。
+ */
+export function volumeRangeOf(title: string): [number, number] | null {
+    const m = /^卷([\d〇零一二三四五六七八九十百]+)(?:\s*[至到—–-]\s*卷?([\d〇零一二三四五六七八九十百]+))?/.exec(title.trim());
+    if (!m) return null;
+    const a = cnNumber(m[1]);
+    const b = m[2] ? cnNumber(m[2]) : a;
+    if (a === null || b === null || b < a || b - a > 200) return null;
+    return [a, b];
 }
 
 export interface VolumeSeg {
