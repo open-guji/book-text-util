@@ -7,3 +7,4 @@ export * from './variants';
 export * from './volumes';
 export * from './wikitext';
 export * from './report';
+export * from './variant-build';

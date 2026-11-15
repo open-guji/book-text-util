@@ -8,17 +8,24 @@ export interface VariantTable {
     version: string;
     sources: string[];
     pairs: string;
+    /** 仅「转简后相同」的字对（collate 表才有，见 variant-build.ts）；默认也当异体 */
+    simp?: string;
+    mode?: string;
 }
 
 /** 由表建判定函数（双向）；两字相同视为同字，不在这里处理 */
-export function buildVariantTest(table: Pick<VariantTable, 'pairs'>): (a: string, b: string) => boolean {
+export function buildVariantTest(table: Pick<VariantTable, 'pairs' | 'simp'>, opts: { simp?: boolean } = {}): (a: string, b: string) => boolean {
     const set = new Set<string>();
-    for (const line of table.pairs.split('\n')) {
-        const cp = Array.from(line);
-        if (cp.length !== 2) continue;
-        set.add(cp[0] + cp[1]);
-        set.add(cp[1] + cp[0]);
-    }
+    const add = (text: string) => {
+        for (const line of text.split('\n')) {
+            const cp = Array.from(line);
+            if (cp.length !== 2) continue;
+            set.add(cp[0] + cp[1]);
+            set.add(cp[1] + cp[0]);
+        }
+    };
+    add(table.pairs);
+    if (table.simp && opts.simp !== false) add(table.simp);
     return (a, b) => set.has(a + b);
 }
 
