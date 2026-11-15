@@ -2,6 +2,7 @@
 /**
  * book-text-util 命令行。
  *   book-text-util export  --root <版本目录> --chapter 020 --format lines|punct|entity [--links] [--glyph original|traditional|simplified] [--title 书名] [--out 目录]
+ *   book-text-util variants --edges edges.tsv [--mode collate|trusted|open] [--no-simp] [--out glyph-variants.json]
  *   book-text-util compare --base 底本.txt --ref 对照本.md [--variants glyph-variants.json] [--json]
  */
 import { parseArgs } from 'node:util';
@@ -12,6 +13,7 @@ import { createGlyphConverters } from './glyph';
 import { dirSource, writeExport } from './node';
 import { compareWhole } from './compare/compare';
 import { buildVariantTest } from './compare/variants';
+import { buildVariantTable, type VariantMode } from './compare/variant-build';
 import { chapterChars } from './compare/wikitext';
 import { buildReport, parseChapters, type ReportChapter } from './compare/report';
 import { charSlots, type CharDoc } from './guji-md';
@@ -22,10 +24,14 @@ const HELP = `用法：
                          [--glyph original|traditional|simplified] [--title 书名] [--id 条目id] [--out 目录]
   book-text-util compare --base <底本.txt> --ref <对照本.md> [--variants <glyph-variants.json>] [--json]
 
+  book-text-util variants --edges <open-guji-cv/config/hanzi/core/edges.tsv> [--mode collate|trusted|open] [--no-simp]
+                         [--out glyph-variants.json]
+
   book-text-util report  --base-root <版本目录> --ref-root <对照版本目录> --chapters 001-005 [--variants <glyph-variants.json>]
                          [--title 标题] [--base-label 名] [--ref-label 名] [--list word,add,omit,glyph] [--out 报告.md]
 
 export：读版本目录里的 index.json 与 <册>.char.json 等，生成 guji-markdown；--glyph 非 original 需要安装 opencc-js 与 book-index-ui。
+variants：生成对校用的异体字表（判法见 src/compare/variant-build.ts；collate 的繁简同形一栏要 opencc-js）。
 compare：把两份文本去标点后做字级比对，列出每处差异及分类。`;
 
 function die(msg: string): never {
@@ -124,8 +130,32 @@ async function cmdReport(argv: string[]) {
     } else process.stdout.write(md + '\n');
 }
 
+async function cmdVariants(argv: string[]) {
+    const { values: v } = parseArgs({
+        args: argv,
+        options: { edges: { type: 'string' }, mode: { type: 'string', default: 'collate' }, 'no-simp': { type: 'boolean', default: false }, out: { type: 'string', default: 'glyph-variants.json' } },
+    });
+    if (!v.edges) die('需要 --edges\n\n' + HELP);
+    const mode = v.mode as VariantMode;
+    if (!['open', 'trusted', 'collate'].includes(mode)) die(`--mode 只认 collate|trusted|open，收到 ${mode}`);
+    let toSimplified: ((s: string) => string) | undefined;
+    if (mode === 'collate' && !v['no-simp']) {
+        try {
+            const { Converter } = await import(/* @vite-ignore */ 'opencc-js/t2cn' as string);
+            toSimplified = Converter({ from: 't', to: 'cn' });
+        } catch (e) {
+            die(`繁简同形一栏需要 opencc-js（${(e as Error).message}）；不要这一栏就加 --no-simp`);
+        }
+    }
+    const table = buildVariantTable(await readFile(v.edges, 'utf-8'), { mode, toSimplified });
+    await writeFile(v.out!, JSON.stringify(table));
+    const n = (s?: string) => (s ? s.split('\n').length : 0);
+    process.stdout.write(`${n(table.pairs)} 对异体、${n(table.simp)} 对繁简同形 → ${v.out}（mode ${mode}，来源 ${table.sources.join('、')}）\n`);
+}
+
 const [cmd, ...rest] = process.argv.slice(2);
 if (cmd === 'export') await cmdExport(rest);
 else if (cmd === 'compare') await cmdCompare(rest);
+else if (cmd === 'variants') await cmdVariants(rest);
 else if (cmd === 'report') await cmdReport(rest);
 else process.stdout.write(HELP + '\n');

@@ -59,6 +59,11 @@ const { items, segments } = await compareWhole({ cells, md, file: '001', label: 
 - `compareChapter`：按卷分段（册↔卷对应）；`runCompare`：连取数一起做（传 `transport`，不给 `isVariant` 时按浏览器环境取 `/compare/glyph-variants.json`，Node 请自己传）。
 - **异体字组**：给了 `isVariant` 时，`diffChars` 按「异体＝同字」对齐，逐字互为异体的等长一段单独成一处（`hunk.variant`，类别 glyph），不再和旁边真正的用字不同粘成一条 word。判定只认表里的直接配对，不做传递（葢≈蓋、蓋≈盖 不推出 葢≈盖，避免 干／乾／幹 之类并成一组）。
 - 异体字判定用 open-guji-cv 的 `edges.tsv` 抽出的表（`{ pairs: "葢蓋\n畧略…" }`）。
+- **异体字表怎么生成**（0.1.4 起在本包）：`book-text-util variants --edges <open-guji-cv/config/hanzi/core/edges.tsv> [--mode collate|trusted|open] --out glyph-variants.json`，或在代码里 `buildVariantTable(edgesTsv, { mode, toSimplified })`。
+  - `trusted`／`open`：与网站原 `scripts/build-glyph-variants.mjs` 一样：variant／variant_partial／simp／z 边，来源限可信（open＝Unihan、本项目、yi-bai；trusted 再加 yitizi、twedu、dypytz、hydzd、cjkvi-simplified），有 distinct 或 borrow（通假）边的不算。
+  - `collate`（默认，2026-11-14 殿本第1–5册参校查漏用、用户认可）：在 trusted 上再加三条——① Unihan 语义／Z 异体或教育部异体字字典认定的，压过通假边（辨/辯、奕/弈、筭/算），distinct 仍否决；② 两字有一个是扩展区字（扩展 A 或 BMP 以外）时，任何来源的 variant 边都算（𠉀/候、𭧂/暴）；常用字之间只靠宽松来源的不算（令/命、壁/璧、宇/字 仍是「用字不同」）；③ 转简后同形的字对另放 `simp` 栏（範/范、乾/幹、閒/閑），`buildVariantTest(table, { simp: false })` 可以不并——对照本是简繁转换来的（维基文库）就该并。
+  - 分类另有两条对照本整理痕迹算 `struct`：底本条目起首的「一」被换成序号（一→十七，前一字是 卷／第／年 等的不算）、对照本写「無法顯示」占位。
+  - 第1–5册 911 处非异体差异上，collate 与人工核过的分类 910 处一致。
 - 其余：`diffChars`、`classify`、`wikiChars`/`chapterChars`、`parseCmp`/`formatCmp`（`?cmp=` 链接）。
 - 界面相关（标记装饰 `decorate`、偏好存储 `prefs`、React 钩子）留在网站，不在本包。
 
