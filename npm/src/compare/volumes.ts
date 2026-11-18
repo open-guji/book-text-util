@@ -52,7 +52,7 @@ export function cnNumber(s: string): number | null {
 
 /** 一级标题「卷一　經部一」→ 1；不是「卷＋数」开头的返回 null */
 export function volumeNo(label: string): number | null {
-    const m = /^卷([\d〇零一二三四五六七八九十百]+)/.exec(label.trim());
+    const m = /(?:^|[、，,；;\s])卷([\d〇零一二三四五六七八九十百]+)/.exec(label.trim());
     return m ? cnNumber(m[1]) : null;
 }
 
@@ -72,7 +72,7 @@ export function wikiFileOf(no: number, chapters: readonly WikiChapter[]): string
  * 用于底本册没有一级标题（卷）时，按册名决定取对照本哪几卷（如全唐文自校本一册一章、章名写「卷七至卷十」）。
  */
 export function volumeRangeOf(title: string): [number, number] | null {
-    const m = /^卷([\d〇零一二三四五六七八九十百]+)(?:\s*[至到—–-]\s*卷?([\d〇零一二三四五六七八九十百]+))?/.exec(title.trim());
+    const m = /(?:^|[、，,；;\s])卷([\d〇零一二三四五六七八九十百]+)(?:\s*[至到—–-]\s*卷?([\d〇零一二三四五六七八九十百]+))?/.exec(title.trim());
     if (!m) return null;
     const a = cnNumber(m[1]);
     const b = m[2] ? cnNumber(m[2]) : a;
