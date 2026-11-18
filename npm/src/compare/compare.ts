@@ -110,6 +110,9 @@ export interface CompareInput {
     volumeRange?: [number, number] | null;
     /** 卷范围来自章条目的固定字段 juan：不管册内一级标题怎么写，一律按这个范围取对照本 */
     volumeRangeFixed?: boolean;
+    /** 起始卷从上一册接续／末卷延续到下一册（一卷占多册）：对照本按本册首尾对齐裁掉不属于本册的部分 */
+    rangeStartsPartial?: boolean;
+    rangeEndsPartial?: boolean;
     /** 那一段的名称（一般就是册名）；不给按卷号写 */
     volumeLabel?: string;
 }
@@ -141,7 +144,7 @@ async function compareSeg(input: CompareInput, seg: VolumeSeg, out: CompareItem[
         wiki = wikiChars(md);
     }
     const base = input.cells.slice(seg.from, seg.to).map((c) => c.c);
-    if (!whole && !range) {
+    if (!whole && (!range || seg.startsPartial || seg.endsPartial)) {
         const [j0, j1] = trimWikiToBase(base, wiki, seg.startsPartial, seg.endsPartial);
         wiki = wiki.slice(j0, j1);
     }
@@ -184,7 +187,7 @@ export async function compareChapter(input: CompareInput): Promise<CompareResult
     // 一级标题认不出卷号（如全唐文册首「欽定全唐文卷三目錄」）也算没有卷标题，按章名取几卷
     if (range && (input.volumeRangeFixed || !input.headings.some((h) => h.level === 1 && volumeNo(h.label) !== null))) {
         const label = input.volumeLabel ?? (range[0] === range[1] ? `卷${range[0]}` : `卷${range[0]}至卷${range[1]}`);
-        const seg: VolumeSeg = { no: range[0], label, from: 0, to: input.cells.length, startsPartial: false, endsPartial: false, headEnd: 0 };
+        const seg: VolumeSeg = { no: range[0], label, from: 0, to: input.cells.length, startsPartial: !!input.rangeStartsPartial, endsPartial: !!input.rangeEndsPartial, headEnd: 0 };
         const items: CompareItem[] = [];
         const res = await compareSeg(input, seg, items, 0, undefined, range);
         items.sort((a, b) => a.i1 - b.i1 || a.i2 - b.i2);

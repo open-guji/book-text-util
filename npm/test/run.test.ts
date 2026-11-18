@@ -54,6 +54,18 @@ describe('runCompare：册无卷标题，按章名取几卷（全唐文自校本
         expect(r.segments).toHaveLength(1);
         expect(r.segments[0]).toMatchObject({ status: 'ok', wikiFiles: ['007', '008'] });
     });
+    it('一卷占两册：前册 juan 止卷＝后册起卷，对照本按本册首尾裁，不把另一册的部分算成缺漏', async () => {
+        const long = '欽定全唐文卷七太宗天地玄黃宇宙洪荒日月盈昃辰宿列張寒來暑往秋收冬藏閏餘成歲律呂調陽雲騰致雨露結為霜金生麗水玉出崑岡劍號巨闕珠稱夜光果珍李柰菜重芥薑海鹹河淡鱗潛羽翔';
+        const cells = Array.from(long.slice(0, 40)).map((c, i) => ({ c, a: `1:1:${i + 1}` }));
+        const t5 = {
+            getTextManifest: async () => ({ versions: [{ key: 'default' }] }),
+            getTextIndex: async (id: string) => (id === 'base' ? { chapters: [{ file: '005', title: 'x', juan: [7, 7] }, { file: '006', title: 'y', juan: [7, 8] }] } : { chapters: [{ file: '007', title: '卷七' }, { file: '008', title: '卷八' }] }),
+            getChapter: async (_i: string, _k: string, f: string) => ({ md: f === '007' ? `## 卷七\n\n${long}\n` : '## 卷八\n\n卷八\n' }),
+        };
+        const r = await runCompare({ transport: t5, base: { id: 'base', key: 'default', chapter: '005' }, target: { id: 'kanripo' }, cells, isVariant: null });
+        expect(r.segments[0].status).toBe('ok');
+        expect(r.items).toEqual([]);
+    });
     it('juan 格式不对当没有', () => {
         expect(juanOf({ juan: [3, 6] })).toEqual([3, 6]);
         expect(juanOf({ juan: [6, 3] })).toBeNull();
