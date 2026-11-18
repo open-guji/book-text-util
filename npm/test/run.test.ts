@@ -1,4 +1,4 @@
-import { resolveTargetKey, runCompare } from '../src/compare/run';
+import { juanOf, resolveTargetKey, runCompare } from '../src/compare/run';
 
 describe('runCompare', () => {
     const baseCells = Array.from('卷端天地玄黃').map((c, i) => ({ c, a: `1:1:${i + 1}` }));
@@ -47,6 +47,18 @@ describe('runCompare：册无卷标题，按章名取几卷（全唐文自校本
         const r = await runCompare({ transport: t3, base: { id: 'base', key: 'default', chapter: '005' }, target: { id: 'kanripo' }, cells: baseCells, isVariant: null });
         expect(r.segments).toHaveLength(1);
         expect(r.segments[0]).toMatchObject({ status: 'ok', wikiFiles: ['007', '008'] });
+    });
+    it('章条目有 juan 字段：不看章名与册内标题，按 [起,止] 取卷', async () => {
+        const t4 = { ...transport, getTextIndex: async (id: string) => (id === 'base' ? { chapters: [{ file: '005', title: '随便什么名', juan: [7, 8], headings: [{ level: 1, label: '卷七', anchor: '1:1:6' }] }] } : { chapters: [{ file: '007', title: '卷七' }, { file: '008', title: '卷八' }] }) };
+        const r = await runCompare({ transport: t4, base: { id: 'base', key: 'default', chapter: '005' }, target: { id: 'kanripo' }, cells: baseCells, isVariant: null });
+        expect(r.segments).toHaveLength(1);
+        expect(r.segments[0]).toMatchObject({ status: 'ok', wikiFiles: ['007', '008'] });
+    });
+    it('juan 格式不对当没有', () => {
+        expect(juanOf({ juan: [3, 6] })).toEqual([3, 6]);
+        expect(juanOf({ juan: [6, 3] })).toBeNull();
+        expect(juanOf({ juan: ['3', 6] })).toBeNull();
+        expect(juanOf({})).toBeNull();
     });
     it('有一卷取不到时记 no-wiki', async () => {
         const t2 = { ...transport, getTextIndex: async (id: string) => (id === 'base' ? { chapters: [{ file: '005', title: '卷七至卷九' }] } : { chapters: [{ file: '007', title: '卷七' }, { file: '008', title: '卷八' }] }) };

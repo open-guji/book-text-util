@@ -47,6 +47,14 @@ export interface RunInput {
 export type RunError = 'no-target' | 'no-base-index';
 
 /** 取齐输入并比对一册。对照本或底本目录取不到时抛 Error(RunError)，调用方静默退回普通阅读 */
+/** 章条目的 juan 字段：`[起, 止]`，正整数、起≤止；不合格式当没有 */
+export function juanOf(ch: Record<string, unknown> | undefined): [number, number] | null {
+    const j = ch?.juan;
+    if (!Array.isArray(j) || j.length !== 2) return null;
+    const [a, b] = j;
+    return Number.isInteger(a) && Number.isInteger(b) && a >= 1 && b >= a ? [a, b] : null;
+}
+
 export async function runCompare(input: RunInput): Promise<CompareResult & { targetKey: string; wikiChapters: WikiChapter[] }> {
     const { base, target, cells } = input;
     const transport = input.transport as TextTransport;
@@ -95,7 +103,9 @@ export async function runCompare(input: RunInput): Promise<CompareResult & { tar
         getWikiMd,
         isVariant,
         // 册无卷标题（如全唐文自校本一册一章、章名「卷七至卷十」）：按章名取对照本的几卷
-        volumeRange: typeof chapters[at]?.title === 'string' ? volumeRangeOf(chapters[at].title as string) : null,
+        // 章条目的 `juan: [起, 止]` 是固定字段（本册含的原书卷号，闭区间），有就只认它；没有才退回章名解析（旧书）
+        volumeRange: juanOf(chapters[at]) ?? (typeof chapters[at]?.title === 'string' ? volumeRangeOf(chapters[at].title as string) : null),
+        volumeRangeFixed: juanOf(chapters[at]) !== null,
         volumeLabel: typeof chapters[at]?.title === 'string' ? (chapters[at].title as string) : undefined,
     });
     return { ...result, targetKey, wikiChapters };

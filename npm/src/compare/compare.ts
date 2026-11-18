@@ -108,6 +108,8 @@ export interface CompareInput {
      * 对照本这几卷拼起来与整册比对。有一级标题时不用。
      */
     volumeRange?: [number, number] | null;
+    /** 卷范围来自章条目的固定字段 juan：不管册内一级标题怎么写，一律按这个范围取对照本 */
+    volumeRangeFixed?: boolean;
     /** 那一段的名称（一般就是册名）；不给按卷号写 */
     volumeLabel?: string;
 }
@@ -180,7 +182,7 @@ async function compareSeg(input: CompareInput, seg: VolumeSeg, out: CompareItem[
 export async function compareChapter(input: CompareInput): Promise<CompareResult> {
     const range = input.volumeRange;
     // 一级标题认不出卷号（如全唐文册首「欽定全唐文卷三目錄」）也算没有卷标题，按章名取几卷
-    if (range && !input.headings.some((h) => h.level === 1 && volumeNo(h.label) !== null)) {
+    if (range && (input.volumeRangeFixed || !input.headings.some((h) => h.level === 1 && volumeNo(h.label) !== null))) {
         const label = input.volumeLabel ?? (range[0] === range[1] ? `卷${range[0]}` : `卷${range[0]}至卷${range[1]}`);
         const seg: VolumeSeg = { no: range[0], label, from: 0, to: input.cells.length, startsPartial: false, endsPartial: false, headEnd: 0 };
         const items: CompareItem[] = [];
