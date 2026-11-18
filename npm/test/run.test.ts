@@ -42,6 +42,12 @@ describe('runCompare：册无卷标题，按章名取几卷（全唐文自校本
         expect(r.segments[0]).toMatchObject({ no: 7, label: '卷七至卷八', status: 'ok', wikiFile: '007', wikiFiles: ['007', '008'] });
         expect(r.items.map((i) => [i.cat, i.base, i.reading])).toEqual([['add', '', '四'], ['word', '玄', '□']]);
     });
+    it('册首一级标题是「欽定全唐文卷七目錄」认不出卷号：仍按章名取几卷', async () => {
+        const t3 = { ...transport, getTextIndex: async (id: string) => (id === 'base' ? { chapters: [{ file: '005', title: '卷七至卷八', headings: [{ level: 1, label: '欽定全唐文卷七目錄', anchor: '1:1:1' }, { level: 2, label: '太宗', anchor: '1:1:8' }] }] } : { chapters: [{ file: '007', title: '卷七' }, { file: '008', title: '卷八' }] }) };
+        const r = await runCompare({ transport: t3, base: { id: 'base', key: 'default', chapter: '005' }, target: { id: 'kanripo' }, cells: baseCells, isVariant: null });
+        expect(r.segments).toHaveLength(1);
+        expect(r.segments[0]).toMatchObject({ status: 'ok', wikiFiles: ['007', '008'] });
+    });
     it('有一卷取不到时记 no-wiki', async () => {
         const t2 = { ...transport, getTextIndex: async (id: string) => (id === 'base' ? { chapters: [{ file: '005', title: '卷七至卷九' }] } : { chapters: [{ file: '007', title: '卷七' }, { file: '008', title: '卷八' }] }) };
         const r = await runCompare({ transport: t2, base: { id: 'base', key: 'default', chapter: '005' }, target: { id: 'kanripo' }, cells: baseCells, isVariant: null });

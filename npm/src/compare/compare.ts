@@ -4,7 +4,7 @@
  */
 import { classify, type DiffCat, type VariantTest } from './classify';
 import { diffChars } from './diff';
-import { splitVolumes, wikiFileOf, type BaseCell, type Heading, type VolumeSeg, type WikiChapter } from './volumes';
+import { splitVolumes, volumeNo, wikiFileOf, type BaseCell, type Heading, type VolumeSeg, type WikiChapter } from './volumes';
 import { chapterChars, wikiChars } from './wikitext';
 
 export interface CompareItem {
@@ -179,7 +179,8 @@ async function compareSeg(input: CompareInput, seg: VolumeSeg, out: CompareItem[
 /** 比对一册：按卷分段，各卷分别取对照本、分别比对（不跨卷错位），结果按底本字序排列 */
 export async function compareChapter(input: CompareInput): Promise<CompareResult> {
     const range = input.volumeRange;
-    if (range && !input.headings.some((h) => h.level === 1)) {
+    // 一级标题认不出卷号（如全唐文册首「欽定全唐文卷三目錄」）也算没有卷标题，按章名取几卷
+    if (range && !input.headings.some((h) => h.level === 1 && volumeNo(h.label) !== null)) {
         const label = input.volumeLabel ?? (range[0] === range[1] ? `卷${range[0]}` : `卷${range[0]}至卷${range[1]}`);
         const seg: VolumeSeg = { no: range[0], label, from: 0, to: input.cells.length, startsPartial: false, endsPartial: false, headEnd: 0 };
         const items: CompareItem[] = [];
