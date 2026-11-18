@@ -251,7 +251,9 @@ describe('Kanripo 式卷名', () => {
         expect(volumeRangeOf('卷一百一至一百三')).toEqual([101, 103]);
         expect(volumeRangeOf('卷七')).toEqual([7, 7]);
         expect(volumeRangeOf('卷十至卷七')).toBeNull();
+        expect(volumeRangeOf('總目三、卷一至卷二')).toEqual([1, 2]);
         expect(volumeRangeOf('目錄')).toBeNull();
+        expect(volumeRangeOf('總目一、總目二')).toBeNull();
     });
     it('wikiChars：拆字式记 □，小注标记去掉', () => {
         expect(wikiChars('## 卷七\n\n天:zi[⿰亻尔]<四|五>。').join('')).toBe('天□四五');
