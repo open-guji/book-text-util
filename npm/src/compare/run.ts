@@ -106,6 +106,9 @@ export async function runCompare(input: RunInput): Promise<CompareResult & { tar
         // 章条目的 `juan: [起, 止]` 是固定字段（本册含的原书卷号，闭区间），有就只认它；没有才退回章名解析（旧书）
         volumeRange: juanOf(chapters[at]) ?? (typeof chapters[at]?.title === 'string' ? volumeRangeOf(chapters[at].title as string) : null),
         volumeRangeFixed: juanOf(chapters[at]) !== null,
+        // 一卷占多册：与前一册的 juan 止卷、后一册的 juan 起卷相同，就是接续／延续，对照本要按首尾对齐裁
+        rangeStartsPartial: at > 0 && juanOf(chapters[at]) !== null && juanOf(chapters[at - 1] as never)?.[1] === juanOf(chapters[at])![0],
+        rangeEndsPartial: at >= 0 && at + 1 < chapters.length && juanOf(chapters[at]) !== null && juanOf(chapters[at + 1] as never)?.[0] === juanOf(chapters[at])![1],
         volumeLabel: typeof chapters[at]?.title === 'string' ? (chapters[at].title as string) : undefined,
     });
     return { ...result, targetKey, wikiChapters };
